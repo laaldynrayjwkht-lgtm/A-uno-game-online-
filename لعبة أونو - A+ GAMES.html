@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>A+ GAMES | لعبة أونو UNO الأونلاين</title>
+    <!-- استدعاء Tailwind CSS للتنسيق السريع والمتجاوب -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- استدعاء مكتبة PeerJS للعب أونلاين فائق السرعة (WebRTC) -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- استدعاء خط Cairo العصري للغة العربية -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* إعدادات الخط الأساسية ومنع التحديد العشوائي */
+        * {
+            font-family: 'Cairo', sans-serif;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+            color: #ffffff;
+            overflow: hidden;
+            height: 100dvh;
+            width: 100vw;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* خلفية طاولة اللعب المتغيرة حسب اللون النشط */
+        .table-felt {
+            background: radial-gradient(circle at center, rgba(30, 41, 59, 0.9) 0%, rgba(9, 13, 22, 0.98) 100%);
+            transition: box-shadow 0.5s ease, border-color 0.5s ease;
+        }
+        .glow-red { box-shadow: inset 0 0 95px rgba(239, 68, 68, 0.38); }
+        .glow-blue { box-shadow: inset 0 0 95px rgba(59, 130, 246, 0.38); }
+        .glow-green { box-shadow: inset 0 0 95px rgba(34, 197, 94, 0.38); }
+        .glow-yellow { box-shadow: inset 0 0 95px rgba(234, 179, 8, 0.38); }
+        .glow-wild { box-shadow: inset 0 0 95px rgba(168, 85, 247, 0.38); }
+
+        /* تصميم بطاقات الأونو الاحترافية */
+        .uno-card {
+            width: 80px;
+            height: 120px;
+            border-radius: 12px;
+            background: #ffffff;
+            padding: 5px;
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15);
+            position: relative;
+            transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease, filter 0.18s ease;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        @media (min-width: 768px) {
+            .uno-card {
+                width: 100px;
+                height: 148px;
+                border-radius: 14px;
+                padding: 6px;
+            }
+        }
+
+        /* البطاقة القابلة للعب */
+        .uno-card.playable {
+            transform: translateY(-14px);
+            box-shadow: 0 12px 24px rgba(255, 255, 255, 0.35), 0 0 16px rgba(250, 204, 21, 0.75);
+            z-index: 10;
+        }
+        .uno-card.playable:hover {
+            transform: translateY(-24px) scale(1.06);
+            z-index: 30;
+        }
+        .uno-card.unplayable {
+            filter: brightness(0.66);
+            cursor: not-allowed;
+        }
+
+        /* الوجه الداخلي للبطاقة */
+        .card-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ألوان البطاقات بتدرجات غنية */
+        .bg-uno-red { background: linear-gradient(135deg, #ff4b4b 0%, #c81e1e 100%); }
+        .bg-uno-blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+        .bg-uno-green { background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); }
+        .bg-uno-yellow { background: linear-gradient(135deg, #facc15 0%, #ca8a04 100%); }
+        .bg-uno-wild { background: linear-gradient(135deg, #1f2937 0%, #090d16 100%); }
+
+        .text-uno-red { color: #dc2626; }
+        .text-uno-blue { color: #2563eb; }
+        .text-uno-green { color: #16a34a; }
+        .text-uno-yellow { color: #d97706; }
+        .text-uno-wild { color: #111827; }
+
+        /* الشكل البيضاوي الأبيض في منتصف البطاقة */
+        .card-oval {
+            width: 86%;
+            height: 68%;
+            background: #ffffff;
+            border-radius: 50%;
+            transform: rotate(-24deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
+        }
+
+        .card-center-symbol {
+            transform: rotate(24deg);
+            font-weight: 900;
+            font-size: 2rem;
+            line-height: 1;
+            text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.15);
+        }
+
+        @media (min-width: 768px) {
+            .card-center-symbol { font-size: 2.6rem; }
+        }
+
+        .card-corner {
+            position: absolute;
+            font-weight: 900;
+            font-size: 0.82rem;
+            color: #ffffff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            line-height: 1;
+        }
+        .corner-tl { top: 5px; left: 6px; }
+        .corner-br { bottom: 5px; right: 6px; transform: rotate(180deg); }
+
+        /* ظهر بطاقة الأونو */
+        .card-back {
+            background: linear-gradient(135deg, #18181b 0%, #09090b 100%);
+            border: 3px solid #ffffff;
+        }
+        .card-back-oval {
+            width: 85%;
+            height: 65%;
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            border-radius: 50%;
+            transform: rotate(-25deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #facc15;
+        }
+        .card-back-logo {
+            transform: rotate(25deg);
+            font-weight: 900;
+            font-size: 1.05rem;
+            color: #facc15;
+            text-shadow: 2px 2px 0 #000000;
+            letter-spacing: -0.5px;
+        }
+
+        /* البطاقات المصغرة للخصوم */
+        .mini-card-back {
+            width: 22px;
+            height: 34px;
+            border-radius: 4px;
+            background: linear-gradient(135deg, #18181b, #000);
+            border: 1.5px solid #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: -10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .mini-card-back:last-child { margin-left: 0; }
+        .mini-card-dot {
+            width: 11px;
+            height: 17px;
+            background: #dc2626;
+            border-radius: 50%;
+            transform: rotate(-20deg);
+            border: 1px solid #facc15;
+        }
+
+        /* حركة حلقة اتجاه اللعب */
+        @keyframes spin-cw {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes spin-ccw {
+            from { transform: rotate(360deg); }
+            to { transform: rotate(0deg); }
+        }
+        .direction-cw { animation: spin-cw 14s linear infinite; }
+        .direction-ccw { animation: spin-ccw 14s linear infinite; }
+
+        /* حركة نبض زر UNO */
+        @keyframes pulse-uno {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.75); }
+            50% { transform: scale(1.08); box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+        }
+        .uno-btn-urgent { animation: pulse-uno 0.9s infinite; }
+
+        /* حركة رمي البطاقة للمنتصف */
+        @keyframes card-drop {
+            0% { transform: scale(1.32) rotate(10deg); opacity: 0.75; }
+            100% { transform: scale(1) rotate(var(--rot, 0deg)); opacity: 1; }
+        }
+        .animate-drop { animation: card-drop 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+        /* شريط التمرير ليد اللاعب */
+        .hand-scroll::-webkit-scrollbar { height: 4px; }
+        .hand-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.22);
+            border-radius: 99px;
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="table-felt flex flex-col justify-between">
+
+    <!-- كانفاس الاحتفال عند الفوز -->
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- شريط الإشعارات العائم (Toast) -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-11/12 max-w-md"></div>
+
+    <!-- =====================================================================
+         1. الشاشة الرئيسية (Main Menu)
+    ====================================================================== -->
+    <div id="screen-menu" class="fixed inset-0 z-40 flex flex-col items-center justify-between p-4 sm:p-5 bg-gradient-to-b from-slate-900 via-slate-950 to-black overflow-y-auto">
+        <!-- الشريط العلوي: شعار الاستوديو + الصوت -->
+        <div class="w-full max-w-2xl flex items-center justify-between">
+            <div class="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full backdrop-blur-md">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                <span class="text-xs sm:text-sm font-black tracking-wider text-amber-400">A+ GAMES</span>
+            </div>
+            <button onclick="SoundFX.toggleMute()" id="btn-mute-menu" class="p-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition active:scale-95" title="كتم / تشغيل الصوت">
+                <span id="mute-icon-menu">🔊</span>
+            </button>
+        </div>
+
+        <!-- الشعار الرئيسي للعبة -->
+        <div class="flex flex-col items-center text-center my-3">
+            <div class="relative mb-2.5">
+                <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-gradient-to-tr from-red-600 via-amber-500 to-yellow-400 p-1 shadow-2xl shadow-red-600/30 transform -rotate-6">
+                    <div class="w-full h-full bg-slate-950 rounded-2xl flex items-center justify-center relative overflow-hidden">
+                        <div class="w-20 h-14 bg-red-600 rounded-full transform -rotate-12 flex items-center justify-center border-2 border-yellow-300 shadow-lg">
+                            <span class="transform rotate-12 text-2xl sm:text-3xl font-black text-yellow-300 drop-shadow-[0_3px_0_rgba(0,0,0,0.9)]">UNO</span>
+                        </div>
+                    </div>
+                </div>
+                <span class="absolute -bottom-2 -right-2 bg-emerald-500 text-slate-950 text-[11px] font-black px-2.5 py-0.5 rounded-full shadow-lg">TURBO</span>
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-black bg-gradient-to-r from-white via-amber-200 to-amber-400 bg-clip-text text-transparent">أونو الأبطال</h1>
+            <p class="text-slate-400 text-xs sm:text-sm mt-1">مزامنة فورية أونلاين مع الأصدقاء أو أوفلاين بدون نت</p>
+        </div>
+
+        <!-- حقل اسم اللاعب + خيار تكديس البطاقات -->
+        <div class="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md space-y-3">
+            <div>
+                <label class="block text-xs text-slate-400 mb-1 font-bold">اسمك في اللعبة</label>
+                <input type="text" id="input-player-name" maxlength="14" placeholder="أدخل اسمك..." value="لاعب A+"
+                    class="w-full bg-slate-900/90 border border-white/15 rounded-xl px-4 py-2.5 text-white font-bold focus:outline-none focus:border-amber-400 transition">
+            </div>
+            <div class="flex items-center justify-between pt-1">
+                <div>
+                    <div class="text-sm font-bold text-white">تكديس بطاقات السحب (+2 / +4)</div>
+                    <div class="text-[11px] text-slate-400">السماح بالرد على +2 بـ +2 أو +4 بـ +4</div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="toggle-stacking" checked class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+            </div>
+        </div>
+
+        <!-- أزرار أوضاع اللعب الثلاثة -->
+        <div class="w-full max-w-md grid grid-cols-1 gap-3 my-3">
+            <!-- الوضع 1: أونلاين -->
+            <button onclick="openSetupModal('online')" class="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 p-4 rounded-2xl shadow-lg shadow-blue-900/40 flex items-center justify-between transition active:scale-98">
+                <div class="flex items-center gap-3.5 text-right">
+                    <div class="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center text-2xl">⚡</div>
+                    <div>
+                        <div class="font-black text-base sm:text-lg text-white">لعب أونلاين فوري (غرف)</div>
+                        <div class="text-xs text-blue-100">كود غرفة + رابط دعوة مباشر للأصدقاء وبوتات</div>
+                    </div>
+                </div>
+                <span class="text-white/80 text-xl group-hover:-translate-x-1 transition">←</span>
+            </button>
+
+            <!-- الوضع 2: ضد الذكاء الاصطناعي -->
+            <button onclick="openSetupModal('bots')" class="group relative overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 p-4 rounded-2xl shadow-lg shadow-emerald-900/40 flex items-center justify-between transition active:scale-98">
+                <div class="flex items-center gap-3.5 text-right">
+                    <div class="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center text-2xl">🤖</div>
+                    <div>
+                        <div class="font-black text-base sm:text-lg text-white">ضد الذكاء الاصطناعي (بدون نت)</div>
+                        <div class="text-xs text-emerald-100">تحدَّ 1 إلى 3 خصوم بمستوى ذكي أو عادي</div>
+                    </div>
+                </div>
+                <span class="text-white/80 text-xl group-hover:-translate-x-1 transition">←</span>
+            </button>
+
+            <!-- الوضع 3: تمرير الجهاز -->
+            <button onclick="openSetupModal('pass')" class="group relative overflow-hidden bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 p-4 rounded-2xl shadow-lg shadow-orange-900/40 flex items-center justify-between transition active:scale-98">
+                <div class="flex items-center gap-3.5 text-right">
+                    <div class="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center text-2xl">📱</div>
+                    <div>
+                        <div class="font-black text-base sm:text-lg text-white">لعب محلي (نفس الجهاز)</div>
+                        <div class="text-xs text-amber-100">مرر الهاتف بين الأصدقاء مع إخفاء الأوراق</div>
+                    </div>
+                </div>
+                <span class="text-white/80 text-xl group-hover:-translate-x-1 transition">←</span>
+            </button>
+        </div>
+
+        <!-- حقوق الاستوديو والمطور -->
+        <div class="text-center text-[11px] text-slate-500 font-semibold flex items-center justify-center gap-2">
+            <span>تطوير <span class="text-amber-400 font-black">A+ GAMES</span></span>
+            <span class="text-slate-700">•</span>
+            <span class="text-slate-400 font-mono text-[10px] tracking-wider">ARJ0611</span>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         2. نوافذ إعداد الأوضاع (Setup Modals)
+    ====================================================================== -->
+    <div id="setup-modal-backdrop" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        
+        <!-- إعداد وضع الذكاء الاصطناعي -->
+        <div id="modal-bots" class="hidden w-full max-w-md bg-slate-900 border border-white/15 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-black text-emerald-400 flex items-center gap-2">🤖 إعداد اللعب ضد البوتات</h2>
+                <button onclick="closeSetupModals()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">✕</button>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-slate-300 mb-2">عدد الخصوم (البوتات)</label>
+                <div class="grid grid-cols-3 gap-2.5" id="bot-count-selector">
+                    <button type="button" onclick="selectBotCount(1)" data-val="1" class="bot-count-btn py-3 rounded-xl font-black border border-white/15 bg-slate-800 hover:bg-slate-700 transition">1 بوت</button>
+                    <button type="button" onclick="selectBotCount(2)" data-val="2" class="bot-count-btn py-3 rounded-xl font-black border-2 border-emerald-400 bg-emerald-500/20 text-emerald-300 transition">2 بوت</button>
+                    <button type="button" onclick="selectBotCount(3)" data-val="3" class="bot-count-btn py-3 rounded-xl font-black border border-white/15 bg-slate-800 hover:bg-slate-700 transition">3 بوت</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-slate-300 mb-2">مستوى الذكاء الاصطناعي</label>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <button type="button" onclick="selectBotDiff('normal')" id="diff-normal" class="py-3 rounded-xl font-bold border border-white/15 bg-slate-800 transition">عادي 🎲</button>
+                    <button type="button" onclick="selectBotDiff('smart')" id="diff-smart" class="py-3 rounded-xl font-bold border-2 border-emerald-400 bg-emerald-500/20 text-emerald-300 transition">ذكي وتكتيكي 🧠</button>
+                </div>
+            </div>
+
+            <button onclick="startBotsGame()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-lg shadow-lg hover:brightness-110 transition active:scale-98">
+                ابدأ المباراة الآن!
+            </button>
+        </div>
+
+        <!-- إعداد وضع تمرير الجهاز (Pass & Play) -->
+        <div id="modal-pass" class="hidden w-full max-w-md bg-slate-900 border border-white/15 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-black text-amber-400 flex items-center gap-2">📱 لعب جماعي على نفس الجهاز</h2>
+                <button onclick="closeSetupModals()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">✕</button>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-slate-300 mb-2">عدد اللاعبين</label>
+                <div class="grid grid-cols-3 gap-2.5">
+                    <button type="button" onclick="selectPassCount(2)" data-val="2" class="pass-count-btn py-2.5 rounded-xl font-black border-2 border-amber-400 bg-amber-500/20 text-amber-300">2 لاعبين</button>
+                    <button type="button" onclick="selectPassCount(3)" data-val="3" class="pass-count-btn py-2.5 rounded-xl font-black border border-white/15 bg-slate-800">3 لاعبين</button>
+                    <button type="button" onclick="selectPassCount(4)" data-val="4" class="pass-count-btn py-2.5 rounded-xl font-black border border-white/15 bg-slate-800">4 لاعبين</button>
+                </div>
+            </div>
+
+            <div id="pass-names-container" class="space-y-2.5 max-h-48 overflow-y-auto pr-1"></div>
+
+            <button onclick="startPassGame()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-lg shadow-lg hover:brightness-110 transition active:scale-98">
+                توزيع الأوراق والبدء
+            </button>
+        </div>
+
+        <!-- إعداد وضع الأونلاين المطور (Turbo PeerJS) -->
+        <div id="modal-online" class="hidden w-full max-w-md bg-slate-900 border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg sm:text-xl font-black text-blue-400 flex items-center gap-2">⚡ غرف اللعب الأونلاين</h2>
+                <button onclick="closeOnlineModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">✕</button>
+            </div>
+
+            <!-- خيارات الإنشاء أو الانضمام -->
+            <div id="online-choice-view" class="space-y-4">
+                <button onclick="OnlineManager.createRoom()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 font-black text-base shadow-lg hover:brightness-110 transition flex items-center justify-center gap-2">
+                    <span>✨ إنشاء غرفة جديدة (مضيف)</span>
+                </button>
+
+                <div class="relative flex py-1 items-center">
+                    <div class="flex-grow border-t border-white/10"></div>
+                    <span class="flex-shrink mx-3 text-xs text-slate-400">أو انضم لغرفة صديقك</span>
+                    <div class="flex-grow border-t border-white/10"></div>
+                </div>
+
+                <div class="flex gap-2">
+                    <input type="text" id="input-room-code" maxlength="6" placeholder="كود الغرفة"
+                        class="flex-1 bg-slate-950 border border-white/20 rounded-xl px-4 py-3 text-center uppercase tracking-widest font-black text-lg text-amber-400 focus:outline-none focus:border-blue-400">
+                    <button onclick="OnlineManager.joinRoom()" class="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-black text-white transition">
+                        دخول
+                    </button>
+                </div>
+            </div>
+
+            <!-- صالة الانتظار المطورة (Lobby) -->
+            <div id="online-lobby-view" class="hidden space-y-3.5">
+                <div class="bg-slate-950 border border-blue-500/30 rounded-2xl p-3.5 text-center space-y-2">
+                    <div class="text-[11px] text-slate-400">كود الغرفة المباشر</div>
+                    <div class="flex items-center justify-center gap-2">
+                        <span id="display-room-code" class="text-3xl font-black tracking-widest text-amber-400 font-mono">-----</span>
+                        <button onclick="copyRoomCode()" class="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold transition">
+                            📋 نسخ الكود
+                        </button>
+                    </div>
+                    <!-- أزرار مشاركة الرابط الفوري -->
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <button onclick="copyInviteLink()" class="py-2 px-2 rounded-xl bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/30 text-blue-300 text-xs font-bold transition">
+                            🔗 نسخ رابط الدعوة
+                        </button>
+                        <button onclick="shareWhatsApp()" class="py-2 px-2 rounded-xl bg-emerald-600/25 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition">
+                            📲 مشاركة واتساب
+                        </button>
+                    </div>
+                    <div id="online-status-text" class="text-[11px] text-blue-300 pt-1">جاري تهيئة الاتصال السريع...</div>
+                </div>
+
+                <!-- قائمة اللاعبين والمقاعد -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-slate-400">المقاعد (<span id="lobby-count">1</span>/4):</span>
+                        <button id="btn-add-lobby-bot" onclick="OnlineManager.addBotToLobby()" class="hidden text-[11px] font-black px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 transition">
+                            + إضافة بوت 🤖
+                        </button>
+                    </div>
+                    <div id="lobby-players-list" class="space-y-2"></div>
+                </div>
+
+                <!-- زر الاستعداد للضيف / زر البدء للمضيف -->
+                <button id="btn-guest-ready" onclick="OnlineManager.toggleGuestReady()" class="hidden w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base transition">
+                    تأكيد الجاهزية ✓
+                </button>
+
+                <button id="btn-start-online-game" onclick="OnlineManager.hostStartGame()" disabled
+                    class="w-full py-3.5 rounded-2xl bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-black text-base transition shadow-lg">
+                    بانتظار انضمام لاعب أو إضافة بوت...
+                </button>
+
+                <div class="text-center text-[10px] text-slate-600 font-mono">A+ GAMES • ARJ0611</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         3. ساحة اللعب الرئيسية (Game Arena)
+    ====================================================================== -->
+    <div id="screen-game" class="hidden flex-col justify-between h-full w-full relative">
+        
+        <!-- الشريط العلوي -->
+        <header class="w-full px-3 py-2 flex items-center justify-between bg-black/45 backdrop-blur-md border-b border-white/10 z-20">
+            <div class="flex items-center gap-2">
+                <button onclick="confirmExitGame()" class="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 text-xs font-bold transition">
+                    خروج
+                </button>
+                <!-- مؤشر البينج والمزامنة في وضع الأونلاين -->
+                <div id="ping-badge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono">
+                    <span id="ping-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span id="ping-ms" class="text-emerald-300">24ms</span>
+                </div>
+            </div>
+
+            <!-- مؤشر اللون النشط الحالي + تراكم السحب -->
+            <div class="flex items-center gap-2">
+                <div id="pending-draw-badge" class="hidden px-2.5 py-1 rounded-full bg-red-600 text-white text-xs font-black animate-bounce shadow-lg">
+                    سحب: +<span id="pending-draw-count">0</span>
+                </div>
+                <div class="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/15">
+                    <span class="text-xs text-slate-300">اللون:</span>
+                    <span id="active-color-dot" class="w-4 h-4 rounded-full bg-red-500 border border-white shadow"></span>
+                    <span id="active-color-name" class="text-xs font-black">أحمر</span>
+                </div>
+            </div>
+
+            <!-- أزرار المزامنة والدردشة السريعة والصوت -->
+            <div class="flex items-center gap-1.5">
+                <button id="btn-force-sync" onclick="OnlineManager.requestManualSync()" class="hidden p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-xs transition" title="تحديث المزامنة">
+                    🔄
+                </button>
+                <button id="btn-quick-chat" onclick="toggleChatPopover()" class="hidden p-2 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-sm transition" title="دردشة سريعة">
+                    💬
+                </button>
+                <button onclick="SoundFX.toggleMute()" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm transition">
+                    <span id="mute-icon-game">🔊</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- نافذة الدردشة السريعة للأونلاين -->
+        <div id="quick-chat-popover" class="hidden fixed top-14 left-3 z-40 w-64 bg-slate-900/95 border border-white/15 rounded-2xl p-3 shadow-2xl backdrop-blur-md">
+            <div class="text-xs font-bold text-slate-400 mb-2">تفاعل سريع مع الغرفة:</div>
+            <div class="grid grid-cols-5 gap-1.5 mb-2.5 text-center text-lg">
+                <button onclick="sendQuickChat('😂')" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/15">😂</button>
+                <button onclick="sendQuickChat('😱')" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/15">😱</button>
+                <button onclick="sendQuickChat('🔥')" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/15">🔥</button>
+                <button onclick="sendQuickChat('😭')" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/15">😭</button>
+                <button onclick="sendQuickChat('👑')" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/15">👑</button>
+            </div>
+            <div class="space-y-1 text-xs font-bold">
+                <button onclick="sendQuickChat('العب بسرعة! ⏱️')" class="w-full text-right px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/15">العب بسرعة! ⏱️</button>
+                <button onclick="sendQuickChat('حظاً موفقاً 🤝')" class="w-full text-right px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/15">حظاً موفقاً 🤝</button>
+                <button onclick="sendQuickChat('يا ساتر على السحب! 💥')" class="w-full text-right px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/15">يا ساتر على السحب! 💥</button>
+            </div>
+        </div>
+
+        <!-- منطقة الخصوم (Opponents Area) -->
+        <div id="opponents-container" class="w-full px-2 pt-2 flex flex-wrap items-center justify-center gap-2 sm:gap-5 z-10"></div>
+
+        <!-- منتصف الطاولة: كومة السحب + كومة الرمي + حلقة الاتجاه + زر UNO -->
+        <div class="flex-1 flex flex-col items-center justify-center relative my-1">
+            
+            <!-- شريط حالة الدور الحالي -->
+            <div id="turn-banner" class="mb-3 px-4 py-1 rounded-full bg-white/10 border border-white/15 text-xs sm:text-sm font-black tracking-wide text-amber-300 shadow">
+                دورك الآن!
+            </div>
+
+            <div class="relative flex items-center justify-center gap-6 sm:gap-10 p-5">
+                <!-- حلقة اتجاه اللعب الدوارة -->
+                <div id="direction-ring" class="absolute inset-0 rounded-full border-2 border-dashed border-white/20 pointer-events-none direction-cw flex items-center justify-between px-1">
+                    <span class="text-white/40 text-xs">↻</span>
+                    <span class="text-white/40 text-xs">↺</span>
+                </div>
+
+                <!-- كومة السحب (Draw Pile) -->
+                <div onclick="handleDrawCardClick()" id="draw-pile-btn" class="relative group cursor-pointer active:scale-95 transition" title="اسحب بطاقة">
+                    <div class="uno-card card-back flex items-center justify-center shadow-2xl group-hover:ring-2 group-hover:ring-amber-400">
+                        <div class="card-back-oval">
+                            <span class="card-back-logo">UNO</span>
+                        </div>
+                    </div>
+                    <span class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[11px] font-bold text-slate-300 whitespace-nowrap bg-black/60 px-2 py-0.5 rounded-full">
+                        اسحب (<span id="deck-count">108</span>)
+                    </span>
+                </div>
+
+                <!-- كومة الرمي (Discard Pile) -->
+                <div id="discard-pile-slot" class="relative flex items-center justify-center"></div>
+            </div>
+
+            <!-- أزرار التفاعل السريع: زر UNO وزر كشف الخصم -->
+            <div class="mt-4 flex items-center gap-3 z-20">
+                <button id="btn-call-uno" onclick="handleCallUno()"
+                    class="px-5 py-2 rounded-full bg-gradient-to-r from-red-600 via-amber-500 to-yellow-500 text-slate-950 font-black text-sm sm:text-base shadow-lg border-2 border-white/80 transition active:scale-90">
+                    صيحة UNO! 📣
+                </button>
+
+                <button id="btn-catch-uno" onclick="handleCatchUno()"
+                    class="hidden px-4 py-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-black text-xs sm:text-sm shadow-lg border border-white/40 animate-bounce transition">
+                    🚨 كشف الخصم (+2)
+                </button>
+            </div>
+        </div>
+
+        <!-- منطقة أوراق اللاعب الحالي (Player Hand) -->
+        <div class="w-full bg-gradient-to-t from-black/85 via-black/50 to-transparent pt-4 pb-3 px-2 z-20">
+            <div class="max-w-4xl mx-auto">
+                <div class="flex items-center justify-between px-3 mb-1">
+                    <span id="current-player-label" class="text-xs sm:text-sm font-black text-white">أوراقك</span>
+                    <span id="hand-count-label" class="text-xs text-slate-400 font-bold">7 بطاقات</span>
+                </div>
+                <div id="player-hand-container" class="hand-scroll flex items-end justify-start sm:justify-center overflow-x-auto pt-6 pb-2 px-4 min-h-[142px] sm:min-h-[170px]"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         4. نافذة اختيار اللون عند لعب الجوكر (Wild Color Picker)
+    ====================================================================== -->
+    <div id="color-picker-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-white/20 rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl space-y-4">
+            <h3 class="text-xl font-black text-white">اختر اللون الجديد 🎨</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="confirmWildColor('red')" class="h-24 rounded-2xl bg-uno-red hover:scale-105 transition shadow-lg border-2 border-white/30 flex items-center justify-center font-black text-lg">أحمر</button>
+                <button onclick="confirmWildColor('blue')" class="h-24 rounded-2xl bg-uno-blue hover:scale-105 transition shadow-lg border-2 border-white/30 flex items-center justify-center font-black text-lg">أزرق</button>
+                <button onclick="confirmWildColor('green')" class="h-24 rounded-2xl bg-uno-green hover:scale-105 transition shadow-lg border-2 border-white/30 flex items-center justify-center font-black text-lg">أخضر</button>
+                <button onclick="confirmWildColor('yellow')" class="h-24 rounded-2xl bg-uno-yellow hover:scale-105 transition shadow-lg border-2 border-white/30 flex items-center justify-center font-black text-lg text-slate-950">أصفر</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         5. شاشة تمرير الجهاز (Pass & Play Privacy Curtain)
+    ====================================================================== -->
+    <div id="pass-curtain" class="hidden fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div class="w-20 h-20 rounded-3xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-4xl mb-4 animate-bounce">
+            📱
+        </div>
+        <h2 class="text-2xl sm:text-3xl font-black text-white mb-2">مرر الجهاز إلى اللاعب التالي</h2>
+        <p class="text-slate-400 text-sm mb-6">تم إخفاء البطاقات حفاظاً على سرية اللعب</p>
+        <div class="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl mb-8">
+            <span class="text-xs text-slate-400 block">الدور الآن للاعب:</span>
+            <span id="pass-next-player-name" class="text-2xl font-black text-amber-400">اللاعب 2</span>
+        </div>
+        <button onclick="revealPassPlayer()" class="px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-lg shadow-xl hover:brightness-110 transition active:scale-95">
+            أنا جاهز، اعرض أوراقي 👁️
+        </button>
+    </div>
+
+    <!-- =====================================================================
+         6. نافذة نهاية المباراة (Game Over / Winner Modal)
+    ====================================================================== -->
+    <div id="gameover-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-amber-400/30 rounded-3xl p-7 max-w-sm w-full text-center shadow-2xl space-y-5">
+            <div id="gameover-emoji" class="text-6xl">🏆</div>
+            <div>
+                <div class="text-xs font-bold text-amber-400 tracking-wider uppercase mb-1">A+ GAMES • نهاية الجولة</div>
+                <h2 id="gameover-title" class="text-2xl sm:text-3xl font-black text-white">مبروك الفوز!</h2>
+                <p id="gameover-subtitle" class="text-sm text-slate-300 mt-1">لقد أنهيت جميع أوراقك ببراعة</p>
+            </div>
+            <div class="flex flex-col gap-2.5 pt-2">
+                <button id="btn-play-again" onclick="restartCurrentMode()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-base shadow-lg hover:brightness-110 transition">
+                    لعب جولة جديدة 🔄
+                </button>
+                <button onclick="exitToMenu()" class="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm transition">
+                    العودة للقائمة الرئيسية
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة تأكيد الخروج المخصصة -->
+    <div id="exit-confirm-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-white/15 rounded-3xl p-6 max-w-xs w-full text-center space-y-4">
+            <h3 class="text-lg font-black text-white">هل تريد مغادرة المباراة؟</h3>
+            <p class="text-xs text-slate-400">سيتم إنهاء الجولة الحالية والعودة للقائمة الرئيسية.</p>
+            <div class="grid grid-cols-2 gap-2.5">
+                <button onclick="exitToMenu()" class="py-2.5 rounded-xl bg-red-600 hover:bg-red-500 font-bold text-sm">نعم، خروج</button>
+                <button onclick="document.getElementById('exit-confirm-modal').classList.add('hidden')" class="py-2.5 rounded-xl bg-white/10 hover:bg-white/20 font-bold text-sm">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         7. المنطق البرمجي المتكامل للعبة (JavaScript Engine)
+    ====================================================================== -->
+    <script>
+        /* =====================================================================
+           أولاً: محرك المؤثرات الصوتية المدمج (Web Audio API)
+        ===================================================================== */
+        const SoundFX = {
+            ctx: null,
+            muted: false,
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            toggleMute() {
+                this.muted = !this.muted;
+                const icon = this.muted ? '🔇' : '🔊';
+                document.getElementById('mute-icon-menu').textContent = icon;
+                document.getElementById('mute-icon-game').textContent = icon;
+                showToast(this.muted ? 'تم كتم الصوت 🔇' : 'تم تفعيل الصوت 🔊');
+            },
+
+            playTone(freq, type, duration, delay = 0, gainVal = 0.14) {
+                if (this.muted) return;
+                try {
+                    this.init();
+                    if (!this.ctx) return;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + delay);
+                    osc.stop(this.ctx.currentTime + delay + duration);
+                } catch (e) {}
+            },
+
+            playCard() {
+                this.playTone(540, 'triangle', 0.1, 0, 0.18);
+                this.playTone(810, 'sine', 0.08, 0.03, 0.12);
+            },
+
+            drawCard() {
+                this.playTone(330, 'sine', 0.09, 0, 0.14);
+                this.playTone(420, 'triangle', 0.08, 0.04, 0.11);
+            },
+
+            unoShout() {
+                this.playTone(587.33, 'square', 0.13, 0, 0.16);
+                this.playTone(880, 'square', 0.25, 0.1, 0.18);
+            },
+
+            penalty() {
+                this.playTone(220, 'sawtooth', 0.16, 0, 0.16);
+                this.playTone(165, 'sawtooth', 0.22, 0.12, 0.16);
+            },
+
+            win() {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((n, i) => this.playTone(n, 'triangle', 0.25, i * 0.11, 0.2));
+            },
+
+            lose() {
+                const notes = [392.00, 349.23, 311.13, 261.63];
+                notes.forEach((n, i) => this.playTone(n, 'sawtooth', 0.25, i * 0.14, 0.13));
+            }
+        };
+
+        /* =====================================================================
+           ثانياً: المتغيرات والثوابت العامة للعبة
+        ===================================================================== */
+        const COLORS = ['red', 'blue', 'green', 'yellow'];
+        const COLOR_NAMES_AR = {
+            red: 'أحمر',
+            blue: 'أزرق',
+            green: 'أخضر',
+            yellow: 'أصفر',
+            wild: 'متعدد'
+        };
+
+        let setupConfig = {
+            mode: 'bots',
+            botCount: 2,
+            botDiff: 'smart',
+            passCount: 2
+        };
+
+        // حالة اللعبة المركزية المزودة برقم تسلسل المزامنة (stateVersion)
+        let gameState = {
+            stateVersion: 0,
+            mode: 'bots',
+            stackingEnabled: true,
+            deck: [],
+            discardPile: [],
+            players: [], // { id, name, isBot, hand: [], saidUno: false, online: true }
+            currentPlayerIndex: 0,
+            direction: 1,
+            activeColor: 'red',
+            pendingDraw: 0,
+            pendingDrawType: null,
+            winner: null,
+            pendingWildCardIndex: null,
+            botTimer: null,
+            unoVulnerablePlayerId: null
+        };
+
+        /* =====================================================================
+           ثالثاً: دوال الواجهة والنوافذ (UI Helpers)
+        ===================================================================== */
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-600/95 border-red-300' :
+                            type === 'success' ? 'bg-emerald-600/95 border-emerald-300' :
+                            'bg-slate-800/95 border-white/20';
+            el.className = `${bgClass} border text-white px-4 py-2 rounded-2xl shadow-xl text-xs sm:text-sm font-bold backdrop-blur-md transition-all duration-200 transform translate-y-0 opacity-100 text-center`;
+            el.textContent = msg;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => el.remove(), 250);
+            }, 2400);
+        }
+
+        function openSetupModal(mode) {
+            SoundFX.init();
+            setupConfig.mode = mode;
+            document.getElementById('setup-modal-backdrop').classList.remove('hidden');
+            document.getElementById('modal-bots').classList.add('hidden');
+            document.getElementById('modal-pass').classList.add('hidden');
+            document.getElementById('modal-online').classList.add('hidden');
+
+            if (mode === 'bots') {
+                document.getElementById('modal-bots').classList.remove('hidden');
+            } else if (mode === 'pass') {
+                document.getElementById('modal-pass').classList.remove('hidden');
+                renderPassNameInputs();
+            } else if (mode === 'online') {
+                document.getElementById('modal-online').classList.remove('hidden');
+                document.getElementById('online-choice-view').classList.remove('hidden');
+                document.getElementById('online-lobby-view').classList.add('hidden');
+            }
+        }
+
+        function closeSetupModals() {
+            document.getElementById('setup-modal-backdrop').classList.add('hidden');
+        }
+
+        function closeOnlineModal() {
+            OnlineManager.cleanup();
+            closeSetupModals();
+        }
+
+        function selectBotCount(count) {
+            setupConfig.botCount = count;
+            document.querySelectorAll('.bot-count-btn').forEach(btn => {
+                const val = parseInt(btn.dataset.val);
+                btn.className = val === count
+                    ? 'bot-count-btn py-3 rounded-xl font-black border-2 border-emerald-400 bg-emerald-500/20 text-emerald-300 transition'
+                    : 'bot-count-btn py-3 rounded-xl font-black border border-white/15 bg-slate-800 hover:bg-slate-700 transition';
+            });
+        }
+
+        function selectBotDiff(diff) {
+            setupConfig.botDiff = diff;
+            const normBtn = document.getElementById('diff-normal');
+            const smartBtn = document.getElementById('diff-smart');
+            if (diff === 'normal') {
+                normBtn.className = 'py-3 rounded-xl font-bold border-2 border-emerald-400 bg-emerald-500/20 text-emerald-300 transition';
+                smartBtn.className = 'py-3 rounded-xl font-bold border border-white/15 bg-slate-800 transition';
+            } else {
+                smartBtn.className = 'py-3 rounded-xl font-bold border-2 border-emerald-400 bg-emerald-500/20 text-emerald-300 transition';
+                normBtn.className = 'py-3 rounded-xl font-bold border border-white/15 bg-slate-800 transition';
+            }
+        }
+
+        function selectPassCount(count) {
+            setupConfig.passCount = count;
+            document.querySelectorAll('.pass-count-btn').forEach(btn => {
+                const val = parseInt(btn.dataset.val);
+                btn.className = val === count
+                    ? 'pass-count-btn py-2.5 rounded-xl font-black border-2 border-amber-400 bg-amber-500/20 text-amber-300'
+                    : 'pass-count-btn py-2.5 rounded-xl font-black border border-white/15 bg-slate-800';
+            });
+            renderPassNameInputs();
+        }
+
+        function renderPassNameInputs() {
+            const container = document.getElementById('pass-names-container');
+            const firstPlayerName = document.getElementById('input-player-name').value.trim() || 'اللاعب 1';
+            container.innerHTML = '';
+            for (let i = 0; i < setupConfig.passCount; i++) {
+                const defaultVal = i === 0 ? firstPlayerName : `اللاعب ${i + 1}`;
+                container.innerHTML += `
+                    <div class="flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 font-black text-xs flex items-center justify-center">${i + 1}</span>
+                        <input type="text" class="pass-player-input flex-1 bg-slate-950 border border-white/15 rounded-xl px-3 py-2 text-sm text-white font-bold focus:outline-none focus:border-amber-400"
+                            value="${defaultVal}" maxlength="14" placeholder="اسم اللاعب ${i + 1}">
+                    </div>
+                `;
+            }
+        }
+
+        function confirmExitGame() {
+            document.getElementById('exit-confirm-modal').classList.remove('hidden');
+        }
+
+        function exitToMenu() {
+            clearTimeout(gameState.botTimer);
+            OnlineManager.cleanup();
+            stopConfetti();
+            document.getElementById('exit-confirm-modal').classList.add('hidden');
+            document.getElementById('gameover-modal').classList.add('hidden');
+            document.getElementById('pass-curtain').classList.add('hidden');
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('flex');
+            document.getElementById('screen-menu').classList.remove('hidden');
+            document.body.className = 'table-felt flex flex-col justify-between';
+        }
+
+        /* =====================================================================
+           رابعاً: بناء حزمة البطاقات الرسمية (108 بطاقة) وتوزيعها
+        ===================================================================== */
+        function createDeck() {
+            const deck = [];
+            let uid = 1;
+
+            COLORS.forEach(color => {
+                deck.push({ id: uid++, color, value: '0', type: 'number' });
+                for (let num = 1; num <= 9; num++) {
+                    deck.push({ id: uid++, color, value: String(num), type: 'number' });
+                    deck.push({ id: uid++, color, value: String(num), type: 'number' });
+                }
+                ['skip', 'reverse', 'draw2'].forEach(action => {
+                    deck.push({ id: uid++, color, value: action, type: 'action' });
+                    deck.push({ id: uid++, color, value: action, type: 'action' });
+                });
+            });
+
+            for (let i = 0; i < 4; i++) {
+                deck.push({ id: uid++, color: 'wild', value: 'wild', type: 'wild' });
+                deck.push({ id: uid++, color: 'wild', value: 'wild4', type: 'wild' });
+            }
+
+            return shuffleDeck(deck);
+        }
+
+        function shuffleDeck(deck) {
+            const arr = [...deck];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function drawFromDeck(count = 1) {
+            const drawn = [];
+            for (let i = 0; i < count; i++) {
+                if (gameState.deck.length === 0) {
+                    if (gameState.discardPile.length <= 1) break;
+                    const topCard = gameState.discardPile.pop();
+                    gameState.deck = shuffleDeck(gameState.discardPile);
+                    gameState.discardPile = [topCard];
+                    showToast('تمت إعادة خلط أوراق الطاولة 🔄');
+                }
+                if (gameState.deck.length > 0) {
+                    drawn.push(gameState.deck.pop());
+                }
+            }
+            return drawn;
+        }
+
+        /* =====================================================================
+           خامساً: بدء الأوضاع المختلفة
+        ===================================================================== */
+        function startBotsGame() {
+            const playerName = document.getElementById('input-player-name').value.trim() || 'أنت';
+            const stacking = document.getElementById('toggle-stacking').checked;
+
+            const botNames = ['روبوت ألفا 🤖', 'سارة AI 🧠', 'صقر الذكي 🦅'];
+            const players = [
+                { id: 'p0', name: playerName, isBot: false, hand: [], saidUno: false, online: true }
+            ];
+
+            for (let i = 0; i < setupConfig.botCount; i++) {
+                players.push({
+                    id: `bot_${i + 1}`,
+                    name: botNames[i] || `بوت ${i + 1}`,
+                    isBot: true,
+                    hand: [],
+                    saidUno: false,
+                    online: true
+                });
+            }
+
+            closeSetupModals();
+            initGameSession('bots', players, stacking);
+        }
+
+        function startPassGame() {
+            const inputs = document.querySelectorAll('.pass-player-input');
+            const stacking = document.getElementById('toggle-stacking').checked;
+            const players = [];
+
+            inputs.forEach((inp, idx) => {
+                players.push({
+                    id: `pass_${idx}`,
+                    name: inp.value.trim() || `اللاعب ${idx + 1}`,
+                    isBot: false,
+                    hand: [],
+                    saidUno: false,
+                    online: true
+                });
+            });
+
+            closeSetupModals();
+            initGameSession('pass', players, stacking);
+        }
+
+        function initGameSession(mode, playersList, stackingEnabled) {
+            clearTimeout(gameState.botTimer);
+            stopConfetti();
+
+            const deck = createDeck();
+            playersList.forEach(p => {
+                p.hand = deck.splice(0, 7);
+                p.saidUno = false;
+                p.online = true;
+            });
+
+            let firstCard = deck.pop();
+            while (firstCard.value === 'wild4') {
+                deck.unshift(firstCard);
+                firstCard = deck.pop();
+            }
+
+            const initialColor = firstCard.color === 'wild'
+                ? COLORS[Math.floor(Math.random() * COLORS.length)]
+                : firstCard.color;
+
+            gameState = {
+                stateVersion: 1,
+                mode,
+                stackingEnabled,
+                deck,
+                discardPile: [firstCard],
+                players: playersList,
+                currentPlayerIndex: 0,
+                direction: 1,
+                activeColor: initialColor,
+                pendingDraw: 0,
+                pendingDrawType: null,
+                winner: null,
+                pendingWildCardIndex: null,
+                botTimer: null,
+                unoVulnerablePlayerId: null
+            };
+
+            if (firstCard.value === 'skip') {
+                gameState.currentPlayerIndex = getNextPlayerIndex(0, 1);
+            } else if (firstCard.value === 'reverse') {
+                if (playersList.length === 2) {
+                    gameState.currentPlayerIndex = 1;
+                } else {
+                    gameState.direction = -1;
+                }
+            } else if (firstCard.value === 'draw2') {
+                gameState.pendingDraw = 2;
+                gameState.pendingDrawType = 'draw2';
+            }
+
+            document.getElementById('screen-menu').classList.add('hidden');
+            document.getElementById('gameover-modal').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('hidden');
+            document.getElementById('screen-game').classList.add('flex');
+
+            const isOnline = mode === 'online';
+            document.getElementById('btn-quick-chat').classList.toggle('hidden', !isOnline);
+            document.getElementById('btn-force-sync').classList.toggle('hidden', !isOnline);
+            const pingBadge = document.getElementById('ping-badge');
+            if (isOnline) {
+                pingBadge.classList.remove('hidden');
+                pingBadge.classList.add('flex');
+            } else {
+                pingBadge.classList.add('hidden');
+                pingBadge.classList.remove('flex');
+            }
+
+            SoundFX.playCard();
+
+            if (isOnline && OnlineManager.isHost) {
+                OnlineManager.broadcastState();
+            }
+
+            renderGame();
+
+            if (mode === 'pass') {
+                showPassCurtain();
+            } else {
+                checkBotTurn();
+            }
+        }
+
+        function restartCurrentMode() {
+            document.getElementById('gameover-modal').classList.add('hidden');
+            if (gameState.mode === 'bots') {
+                startBotsGame();
+            } else if (gameState.mode === 'pass') {
+                const cleanPlayers = gameState.players.map(p => ({ ...p, hand: [], saidUno: false }));
+                initGameSession('pass', cleanPlayers, gameState.stackingEnabled);
+            } else if (gameState.mode === 'online') {
+                if (OnlineManager.isHost) {
+                    OnlineManager.hostStartGame();
+                } else {
+                    showToast('بانتظار المضيف لبدء جولة جديدة...');
+                }
+            }
+        }
+
+        /* =====================================================================
+           سادساً: قواعد اللعب والتحقق من البطاقات
+        ===================================================================== */
+        function getTopCard() {
+            return gameState.discardPile[gameState.discardPile.length - 1];
+        }
+
+        function getNextPlayerIndex(fromIndex = gameState.currentPlayerIndex, step = 1) {
+            const len = gameState.players.length;
+            return (fromIndex + (step * gameState.direction) % len + len) % len;
+        }
+
+        function isCardPlayable(card) {
+            const topCard = getTopCard();
+            if (!topCard) return true;
+
+            if (gameState.pendingDraw > 0) {
+                if (!gameState.stackingEnabled) return false;
+                if (gameState.pendingDrawType === 'draw2' && card.value === 'draw2') return true;
+                if (gameState.pendingDrawType === 'wild4' && card.value === 'wild4') return true;
+                return false;
+            }
+
+            if (card.color === 'wild') return true;
+            if (card.color === gameState.activeColor) return true;
+            if (card.value === topCard.value) return true;
+
+            return false;
+        }
+
+        function getViewerPlayerIndex() {
+            if (gameState.mode === 'bots') return 0;
+            if (gameState.mode === 'pass') return gameState.currentPlayerIndex;
+            if (gameState.mode === 'online') {
+                const idx = gameState.players.findIndex(p => p.id === OnlineManager.myPeerId);
+                return idx >= 0 ? idx : 0;
+            }
+            return 0;
+        }
+
+        function isMyTurn() {
+            if (gameState.winner) return false;
+            if (gameState.mode === 'pass') return true;
+            return gameState.currentPlayerIndex === getViewerPlayerIndex();
+        }
+
+        /* =====================================================================
+           سابعاً: تنفيذ الحركات (مع الاستجابة الفورية Optimistic UI في الأونلاين)
+        ===================================================================== */
+        function handleCardClick(cardIndex) {
+            if (!isMyTurn()) {
+                showToast('انتظر دورك!', 'error');
+                return;
+            }
+
+            const player = gameState.players[gameState.currentPlayerIndex];
+            const card = player.hand[cardIndex];
+            if (!card || !isCardPlayable(card)) {
+                showToast('لا يمكنك لعب هذه البطاقة الآن', 'error');
+                return;
+            }
+
+            if (card.color === 'wild') {
+                gameState.pendingWildCardIndex = cardIndex;
+                document.getElementById('color-picker-modal').classList.remove('hidden');
+                return;
+            }
+
+            executePlayCard(gameState.currentPlayerIndex, cardIndex, card.color);
+        }
+
+        function confirmWildColor(chosenColor) {
+            document.getElementById('color-picker-modal').classList.add('hidden');
+            const idx = gameState.pendingWildCardIndex;
+            gameState.pendingWildCardIndex = null;
+            if (idx !== null) {
+                executePlayCard(gameState.currentPlayerIndex, idx, chosenColor);
+            }
+        }
+
+        function executePlayCard(playerIndex, cardIndex, chosenColor) {
+            // إذا كان الضيف في وضع الأونلاين: أرسل الحركة فوراً للمضيف + طبق استجابة بصرية لحظية
+            if (gameState.mode === 'online' && !OnlineManager.isHost) {
+                const player = gameState.players[playerIndex];
+                if (!player || !player.hand[cardIndex]) return;
+
+                OnlineManager.sendActionToHost({
+                    type: 'PLAY_CARD',
+                    playerIndex,
+                    cardIndex,
+                    chosenColor,
+                    clientVersion: gameState.stateVersion
+                });
+
+                // استجابة بصرية لحظية (Optimistic UI) لإلغاء أي شعور بالتأخير
+                const [optimisticCard] = player.hand.splice(cardIndex, 1);
+                gameState.discardPile.push(optimisticCard);
+                gameState.activeColor = optimisticCard.color === 'wild' ? chosenColor : optimisticCard.color;
+                gameState.currentPlayerIndex = getNextPlayerIndex(playerIndex, 1);
+                SoundFX.playCard();
+                renderGame();
+                return;
+            }
+
+            // المضيف أو اللعب المحلي يتحقق وينفذ رسمياً
+            const player = gameState.players[playerIndex];
+            if (!player || !player.hand[cardIndex]) return;
+            const candidateCard = player.hand[cardIndex];
+            if (!isCardPlayable(candidateCard)) return;
+
+            const [card] = player.hand.splice(cardIndex, 1);
+            gameState.discardPile.push(card);
+            gameState.activeColor = card.color === 'wild' ? chosenColor : card.color;
+            gameState.stateVersion++;
+
+            if (player.hand.length === 1) {
+                if (!player.saidUno) {
+                    gameState.unoVulnerablePlayerId = player.id;
+                }
+            } else {
+                player.saidUno = false;
+                if (gameState.unoVulnerablePlayerId === player.id) {
+                    gameState.unoVulnerablePlayerId = null;
+                }
+            }
+
+            SoundFX.playCard();
+
+            if (player.hand.length === 0) {
+                finishGame(player);
+                return;
+            }
+
+            let step = 1;
+            const totalPlayers = gameState.players.length;
+
+            if (card.value === 'skip') {
+                step = 2;
+                showToast(`تم تخطي دور ${gameState.players[getNextPlayerIndex(playerIndex, 1)].name}! 🚫`);
+            } else if (card.value === 'reverse') {
+                if (totalPlayers === 2) {
+                    step = 2;
+                } else {
+                    gameState.direction *= -1;
+                    showToast('تم عكس اتجاه اللعب! 🔄');
+                }
+            } else if (card.value === 'draw2') {
+                gameState.pendingDraw += 2;
+                gameState.pendingDrawType = 'draw2';
+            } else if (card.value === 'wild4') {
+                gameState.pendingDraw += 4;
+                gameState.pendingDrawType = 'wild4';
+            }
+
+            gameState.currentPlayerIndex = getNextPlayerIndex(playerIndex, step);
+            afterTurnUpdate();
+        }
+
+        function handleDrawCardClick() {
+            if (!isMyTurn()) {
+                showToast('ليس دورك للسحب!', 'error');
+                return;
+            }
+            executeDrawCard(gameState.currentPlayerIndex);
+        }
+
+        function executeDrawCard(playerIndex) {
+            if (gameState.mode === 'online' && !OnlineManager.isHost) {
+                OnlineManager.sendActionToHost({
+                    type: 'DRAW_CARD',
+                    playerIndex,
+                    clientVersion: gameState.stateVersion
+                });
+                SoundFX.drawCard();
+                return;
+            }
+
+            const player = gameState.players[playerIndex];
+            if (!player) return;
+            gameState.stateVersion++;
+
+            if (gameState.pendingDraw > 0) {
+                const count = gameState.pendingDraw;
+                const drawn = drawFromDeck(count);
+                player.hand.push(...drawn);
+                player.saidUno = false;
+                if (gameState.unoVulnerablePlayerId === player.id) {
+                    gameState.unoVulnerablePlayerId = null;
+                }
+                SoundFX.penalty();
+                showToast(`${player.name} سحب ${count} بطاقات! 💥`);
+
+                gameState.pendingDraw = 0;
+                gameState.pendingDrawType = null;
+                gameState.currentPlayerIndex = getNextPlayerIndex(playerIndex, 1);
+                afterTurnUpdate();
+                return;
+            }
+
+            const [drawnCard] = drawFromDeck(1);
+            if (!drawnCard) return;
+
+            player.hand.push(drawnCard);
+            player.saidUno = false;
+            SoundFX.drawCard();
+
+            if (!isCardPlayable(drawnCard)) {
+                showToast(`${player.name} سحب بطاقة وتمرر الدور`);
+                gameState.currentPlayerIndex = getNextPlayerIndex(playerIndex, 1);
+            } else {
+                showToast(`${player.name} سحب بطاقة صالحة للعب!`);
+            }
+
+            afterTurnUpdate();
+        }
+
+        function handleCallUno() {
+            const viewerIdx = getViewerPlayerIndex();
+            const player = gameState.players[viewerIdx];
+            if (!player) return;
+
+            if (gameState.mode === 'online' && !OnlineManager.isHost) {
+                OnlineManager.sendActionToHost({ type: 'CALL_UNO', playerId: player.id });
+                SoundFX.unoShout();
+                return;
+            }
+
+            executeCallUno(player.id);
+        }
+
+        function executeCallUno(playerId) {
+            const player = gameState.players.find(p => p.id === playerId);
+            if (!player) return;
+
+            if (player.hand.length <= 2) {
+                player.saidUno = true;
+                if (gameState.unoVulnerablePlayerId === player.id) {
+                    gameState.unoVulnerablePlayerId = null;
+                }
+                gameState.stateVersion++;
+                SoundFX.unoShout();
+                showToast(`📣 ${player.name} صاح: أونـو UNO!`, 'success');
+                if (gameState.mode === 'online' && OnlineManager.isHost) {
+                    OnlineManager.broadcastState();
+                }
+                renderGame();
+            } else {
+                showToast('تضغط زر UNO فقط عندما يتبقى لديك بطاقة أو بطاقتان!', 'error');
+            }
+        }
+
+        function handleCatchUno() {
+            if (!gameState.unoVulnerablePlayerId) return;
+            const catcherIdx = getViewerPlayerIndex();
+            const catcher = gameState.players[catcherIdx];
+
+            if (gameState.mode === 'online' && !OnlineManager.isHost) {
+                OnlineManager.sendActionToHost({
+                    type: 'CATCH_UNO',
+                    targetId: gameState.unoVulnerablePlayerId,
+                    catcherName: catcher.name
+                });
+                return;
+            }
+
+            executeCatchUno(gameState.unoVulnerablePlayerId, catcher.name);
+        }
+
+        function executeCatchUno(targetId, catcherName) {
+            const target = gameState.players.find(p => p.id === targetId);
+            if (!target || target.hand.length !== 1 || target.saidUno) return;
+
+            const penaltyCards = drawFromDeck(2);
+            target.hand.push(...penaltyCards);
+            gameState.unoVulnerablePlayerId = null;
+            gameState.stateVersion++;
+            SoundFX.penalty();
+            showToast(`🚨 ${catcherName} كشف ${target.name}! عقوبة +2 بطاقات`, 'error');
+
+            if (gameState.mode === 'online' && OnlineManager.isHost) {
+                OnlineManager.broadcastState();
+            }
+            renderGame();
+        }
+
+        function afterTurnUpdate() {
+            if (gameState.mode === 'online' && OnlineManager.isHost) {
+                OnlineManager.broadcastState();
+            }
+
+            renderGame();
+
+            if (gameState.winner) return;
+
+            if (gameState.mode === 'pass') {
+                showPassCurtain();
+            } else if (gameState.mode === 'bots' || (gameState.mode === 'online' && OnlineManager.isHost)) {
+                checkBotTurn();
+            }
+        }
+
+        /* =====================================================================
+           ثامناً: الذكاء الاصطناعي للبوتات (يدعم اللعب الأوفلاين والأونلاين)
+        ===================================================================== */
+        function checkBotTurn() {
+            clearTimeout(gameState.botTimer);
+            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            if (!currentPlayer || !currentPlayer.isBot || gameState.winner) return;
+
+            if (gameState.unoVulnerablePlayerId) {
+                const target = gameState.players.find(p => p.id === gameState.unoVulnerablePlayerId);
+                if (target && !target.isBot && Math.random() < 0.7) {
+                    setTimeout(() => {
+                        if (gameState.unoVulnerablePlayerId === target.id) {
+                            executeCatchUno(target.id, currentPlayer.name);
+                        }
+                    }, 550);
+                }
+            }
+
+            gameState.botTimer = setTimeout(() => {
+                performBotMove();
+            }, 780);
+        }
+
+        function performBotMove() {
+            const botIdx = gameState.currentPlayerIndex;
+            const bot = gameState.players[botIdx];
+            if (!bot || !bot.isBot || gameState.winner) return;
+
+            const validIndices = [];
+            bot.hand.forEach((card, idx) => {
+                if (isCardPlayable(card)) validIndices.push(idx);
+            });
+
+            if (validIndices.length > 0) {
+                let chosenIdx = validIndices[0];
+
+                if (setupConfig.botDiff === 'smart' || gameState.mode === 'online') {
+                    validIndices.sort((a, b) => {
+                        const cardA = bot.hand[a];
+                        const cardB = bot.hand[b];
+                        const score = c => {
+                            if (c.value === 'draw2' || c.value === 'skip' || c.value === 'reverse') return 3;
+                            if (c.type === 'number') return 2;
+                            if (c.value === 'wild') return 1;
+                            return 0;
+                        };
+                        return score(cardB) - score(cardA);
+                    });
+                    chosenIdx = validIndices[0];
+                } else {
+                    chosenIdx = validIndices[Math.floor(Math.random() * validIndices.length)];
+                }
+
+                const chosenCard = bot.hand[chosenIdx];
+
+                if (bot.hand.length === 2) {
+                    if (setupConfig.botDiff === 'smart' || gameState.mode === 'online' || Math.random() < 0.5) {
+                        bot.saidUno = true;
+                        SoundFX.unoShout();
+                        showToast(`📣 ${bot.name} صاح: أونـو UNO!`);
+                    }
+                }
+
+                let bestColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+                if (chosenCard.color === 'wild') {
+                    const colorCounts = { red: 0, blue: 0, green: 0, yellow: 0 };
+                    bot.hand.forEach(c => {
+                        if (colorCounts[c.color] !== undefined) colorCounts[c.color]++;
+                    });
+                    bestColor = Object.keys(colorCounts).reduce((a, b) => colorCounts[a] >= colorCounts[b] ? a : b);
+                }
+
+                executePlayCard(botIdx, chosenIdx, bestColor);
+            } else {
+                executeDrawCard(botIdx);
+            }
+        }
+
+        /* =====================================================================
+           تاسعاً: شاشة تمرير الجهاز (Pass & Play Curtain)
+        ===================================================================== */
+        function showPassCurtain() {
+            const nextPlayer = gameState.players[gameState.currentPlayerIndex];
+            document.getElementById('pass-next-player-name').textContent = nextPlayer.name;
+            document.getElementById('pass-curtain').classList.remove('hidden');
+        }
+
+        function revealPassPlayer() {
+            document.getElementById('pass-curtain').classList.add('hidden');
+            renderGame();
+        }
+
+        /* =====================================================================
+           عاشراً: رسم عناصر اللعبة والبطاقات (Rendering)
+        ===================================================================== */
+        function getCardSymbolHTML(card) {
+            switch (card.value) {
+                case 'skip': return '🚫';
+                case 'reverse': return '⇄';
+                case 'draw2': return '+2';
+                case 'wild': return '🌈';
+                case 'wild4': return '+4';
+                default: return card.value;
+            }
+        }
+
+        function getCardCornerText(card) {
+            switch (card.value) {
+                case 'skip': return '⊘';
+                case 'reverse': return '⇄';
+                case 'draw2': return '+2';
+                case 'wild': return 'W';
+                case 'wild4': return '+4';
+                default: return card.value;
+            }
+        }
+
+        function createCardElement(card, options = {}) {
+            const { playable = false, unplayable = false, onClick = null, isDiscard = false } = options;
+            const div = document.createElement('div');
+            div.className = `uno-card ${playable ? 'playable' : ''} ${unplayable ? 'unplayable' : ''} ${isDiscard ? 'animate-drop' : ''}`;
+            if (isDiscard) {
+                const randomRot = (Math.random() * 14 - 7).toFixed(1);
+                div.style.setProperty('--rot', `${randomRot}deg`);
+            }
+
+            const bgClass = `bg-uno-${card.color}`;
+            const textClass = `text-uno-${card.color}`;
+            const cornerTxt = getCardCornerText(card);
+            const centerSym = getCardSymbolHTML(card);
+
+            div.innerHTML = `
+                <div class="card-inner ${bgClass}">
+                    <span class="card-corner corner-tl">${cornerTxt}</span>
+                    <div class="card-oval">
+                        <span class="card-center-symbol ${textClass}">${centerSym}</span>
+                    </div>
+                    <span class="card-corner corner-br">${cornerTxt}</span>
+                </div>
+            `;
+
+            if (onClick) {
+                div.addEventListener('click', onClick);
+            }
+            return div;
+        }
+
+        function renderGame() {
+            if (!gameState.players.length) return;
+
+            document.body.className = `table-felt flex flex-col justify-between glow-${gameState.activeColor}`;
+
+            const colorDot = document.getElementById('active-color-dot');
+            const colorName = document.getElementById('active-color-name');
+            colorDot.className = `w-4 h-4 rounded-full border border-white shadow bg-uno-${gameState.activeColor}`;
+            colorName.textContent = COLOR_NAMES_AR[gameState.activeColor];
+
+            const pendingBadge = document.getElementById('pending-draw-badge');
+            if (gameState.pendingDraw > 0) {
+                pendingBadge.classList.remove('hidden');
+                document.getElementById('pending-draw-count').textContent = gameState.pendingDraw;
+            } else {
+                pendingBadge.classList.add('hidden');
+            }
+
+            const dirRing = document.getElementById('direction-ring');
+            dirRing.classList.remove('direction-cw', 'direction-ccw');
+            dirRing.classList.add(gameState.direction === 1 ? 'direction-cw' : 'direction-ccw');
+            document.getElementById('deck-count').textContent = gameState.deck.length;
+
+            const discardSlot = document.getElementById('discard-pile-slot');
+            discardSlot.innerHTML = '';
+            const topCard = getTopCard();
+            if (topCard) {
+                discardSlot.appendChild(createCardElement(topCard, { isDiscard: true }));
+            }
+
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            const viewerIdx = getViewerPlayerIndex();
+            const viewerPlayer = gameState.players[viewerIdx];
+            const turnBanner = document.getElementById('turn-banner');
+
+            if (gameState.currentPlayerIndex === viewerIdx) {
+                turnBanner.textContent = gameState.pendingDraw > 0
+                    ? `⚠️ دورك! العب بطاقة تكديس أو اسحب +${gameState.pendingDraw}`
+                    : '✨ دورك الآن! اختر بطاقة أو اسحب';
+                turnBanner.className = 'mb-3 px-4 py-1 rounded-full bg-amber-500/25 border border-amber-400 text-xs sm:text-sm font-black text-amber-300 shadow-lg';
+            } else {
+                turnBanner.textContent = `⏳ دور: ${activePlayer.name}`;
+                turnBanner.className = 'mb-3 px-4 py-1 rounded-full bg-white/10 border border-white/15 text-xs sm:text-sm font-bold text-slate-300';
+            }
+
+            const opponentsContainer = document.getElementById('opponents-container');
+            opponentsContainer.innerHTML = '';
+            gameState.players.forEach((p, idx) => {
+                if (idx === viewerIdx) return;
+                const isTurn = idx === gameState.currentPlayerIndex;
+                const miniCardsCount = Math.min(p.hand.length, 7);
+                let miniCardsHTML = '';
+                for (let c = 0; c < miniCardsCount; c++) {
+                    miniCardsHTML += `<div class="mini-card-back"><div class="mini-card-dot"></div></div>`;
+                }
+
+                const oppEl = document.createElement('div');
+                oppEl.className = `px-3 py-2 rounded-2xl border transition-all flex flex-col items-center ${
+                    isTurn
+                        ? 'bg-amber-500/20 border-amber-400 shadow-lg shadow-amber-500/20 scale-105'
+                        : 'bg-white/5 border-white/10 opacity-85'
+                }`;
+                oppEl.innerHTML = `
+                    <div class="flex items-center gap-1.5 mb-1">
+                        ${gameState.mode === 'online' ? `<span class="w-2 h-2 rounded-full ${p.online !== false ? 'bg-emerald-400' : 'bg-red-500'}"></span>` : ''}
+                        <span class="text-xs font-black text-white truncate max-w-[90px]">${p.name}</span>
+                        <span class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-black text-amber-300">${p.hand.length}</span>
+                        ${p.hand.length === 1 && p.saidUno ? '<span class="px-1.5 py-0.2 rounded bg-red-600 text-[9px] font-black">UNO</span>' : ''}
+                    </div>
+                    <div class="flex items-center justify-center h-9">${miniCardsHTML}</div>
+                `;
+                opponentsContainer.appendChild(oppEl);
+            });
+
+            const handContainer = document.getElementById('player-hand-container');
+            handContainer.innerHTML = '';
+            document.getElementById('current-player-label').textContent = `أوراق ${viewerPlayer.name}`;
+            document.getElementById('hand-count-label').textContent = `${viewerPlayer.hand.length} بطاقات`;
+
+            const myTurnNow = isMyTurn();
+            viewerPlayer.hand.forEach((card, index) => {
+                const canPlay = myTurnNow && isCardPlayable(card);
+                const cardEl = createCardElement(card, {
+                    playable: canPlay,
+                    unplayable: myTurnNow && !canPlay,
+                    onClick: () => handleCardClick(index)
+                });
+                cardEl.style.marginLeft = viewerPlayer.hand.length > 7 ? '-18px' : '4px';
+                handContainer.appendChild(cardEl);
+            });
+
+            const unoBtn = document.getElementById('btn-call-uno');
+            if (viewerPlayer.hand.length <= 2 && !viewerPlayer.saidUno) {
+                unoBtn.classList.add('uno-btn-urgent');
+            } else {
+                unoBtn.classList.remove('uno-btn-urgent');
+            }
+
+            const catchBtn = document.getElementById('btn-catch-uno');
+            if (gameState.unoVulnerablePlayerId && gameState.unoVulnerablePlayerId !== viewerPlayer.id) {
+                catchBtn.classList.remove('hidden');
+            } else {
+                catchBtn.classList.add('hidden');
+            }
+        }
+
+        /* =====================================================================
+           حادي عشر: إنهاء المباراة وتأثير الكونفيتي
+        ===================================================================== */
+        function finishGame(winnerPlayer) {
+            gameState.winner = winnerPlayer;
+            gameState.stateVersion++;
+            clearTimeout(gameState.botTimer);
+
+            if (gameState.mode === 'online' && OnlineManager.isHost) {
+                OnlineManager.broadcastState();
+            }
+
+            renderGame();
+            showGameOverScreen(winnerPlayer);
+        }
+
+        function showGameOverScreen(winnerPlayer) {
+            const viewerIdx = getViewerPlayerIndex();
+            const viewer = gameState.players[viewerIdx];
+            const isMe = winnerPlayer.id === viewer.id;
+
+            document.getElementById('gameover-emoji').textContent = isMe ? '🏆' : '🎮';
+            document.getElementById('gameover-title').textContent = isMe ? 'أنت البطل! مبروك الفوز' : `فاز ${winnerPlayer.name}!`;
+            document.getElementById('gameover-subtitle').textContent = isMe
+                ? 'أداء أسطوري في طاولة أونو A+ GAMES'
+                : 'حظاً أوفر في الجولة القادمة!';
+
+            document.getElementById('gameover-modal').classList.remove('hidden');
+
+            if (isMe || gameState.mode === 'pass') {
+                SoundFX.win();
+                startConfetti();
+            } else {
+                SoundFX.lose();
+            }
+        }
+
+        let confettiAnimId = null;
+        function startConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const pieces = Array.from({ length: 120 }, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                r: Math.random() * 6 + 4,
+                d: Math.random() * 10 + 5,
+                color: ['#ef4444', '#3b82f6', '#22c55e', '#facc15', '#a855f7'][Math.floor(Math.random() * 5)],
+                tilt: Math.random() * 10 - 10,
+                tiltAngle: 0,
+                tiltAngleInc: Math.random() * 0.07 + 0.05
+            }));
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                pieces.forEach(p => {
+                    p.tiltAngle += p.tiltAngleInc;
+                    p.y += (Math.cos(p.d) + 3 + p.r / 2) * 0.75;
+                    p.tilt = Math.sin(p.tiltAngle) * 12;
+                    if (p.y > canvas.height) {
+                        p.y = -10;
+                        p.x = Math.random() * canvas.width;
+                    }
+                    ctx.beginPath();
+                    ctx.lineWidth = p.r;
+                    ctx.strokeStyle = p.color;
+                    ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+                    ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+                    ctx.stroke();
+                });
+                confettiAnimId = requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        function stopConfetti() {
+            if (confettiAnimId) cancelAnimationFrame(confettiAnimId);
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        /* =====================================================================
+           ثاني عشر: نظام الغرف والمزامنة فائقة السرعة (Turbo PeerJS Engine)
+        ===================================================================== */
+        const PEER_CONFIG = {
+            debug: 0,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478' }
+                ]
+            }
+        };
+
+        const OnlineManager = {
+            peer: null,
+            isHost: false,
+            myPeerId: null,
+            roomCode: '',
+            connections: [],
+            hostConn: null,
+            lobbyPlayers: [], // { id, name, ready, isBot }
+            heartbeatInterval: null,
+            lastSyncedVersion: 0,
+            isGuestReady: false,
+
+            generateShortCode() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let res = '';
+                for (let i = 0; i < 5; i++) res += chars[Math.floor(Math.random() * chars.length)];
+                return res;
+            },
+
+            startHeartbeat() {
+                clearInterval(this.heartbeatInterval);
+                this.heartbeatInterval = setInterval(() => {
+                    const now = Date.now();
+                    if (this.isHost) {
+                        this.connections.forEach(c => {
+                            if (c.open) c.send({ type: 'PING', ts: now, v: gameState.stateVersion });
+                        });
+                    } else if (this.hostConn && this.hostConn.open) {
+                        this.hostConn.send({ type: 'PING', ts: now, v: gameState.stateVersion });
+                    }
+                }, 2000);
+            },
+
+            updatePingDisplay(ms) {
+                const pingEl = document.getElementById('ping-ms');
+                const dotEl = document.getElementById('ping-dot');
+                if (!pingEl || !dotEl) return;
+                pingEl.textContent = `${ms}ms`;
+                if (ms < 100) {
+                    pingEl.className = 'text-emerald-300';
+                    dotEl.className = 'w-2 h-2 rounded-full bg-emerald-400';
+                } else if (ms < 250) {
+                    pingEl.className = 'text-amber-300';
+                    dotEl.className = 'w-2 h-2 rounded-full bg-amber-400';
+                } else {
+                    pingEl.className = 'text-red-300';
+                    dotEl.className = 'w-2 h-2 rounded-full bg-red-500';
+                }
+            },
+
+            createRoom() {
+                if (typeof Peer === 'undefined') {
+                    showToast('تعذر تحميل محرك الاتصال، تحقق من الإنترنت', 'error');
+                    return;
+                }
+                this.cleanup();
+                this.isHost = true;
+                this.roomCode = this.generateShortCode();
+                const fullId = `aplus-uno-${this.roomCode}`;
+
+                document.getElementById('online-choice-view').classList.add('hidden');
+                document.getElementById('online-lobby-view').classList.remove('hidden');
+                document.getElementById('btn-guest-ready').classList.add('hidden');
+                document.getElementById('btn-add-lobby-bot').classList.remove('hidden');
+                document.getElementById('display-room-code').textContent = this.roomCode;
+                document.getElementById('online-status-text').textContent = 'جاري فتح الغرفة السريعة...';
+
+                this.peer = new Peer(fullId, PEER_CONFIG);
+
+                this.peer.on('open', (id) => {
+                    this.myPeerId = id;
+                    const myName = document.getElementById('input-player-name').value.trim() || 'المضيف';
+                    this.lobbyPlayers = [{ id, name: myName, ready: true, isBot: false }];
+                    document.getElementById('online-status-text').textContent = 'الغرفة جاهزة! شارك الكود أو الرابط مع أصدقائك';
+                    this.updateLobbyUI();
+                    this.startHeartbeat();
+                });
+
+                this.peer.on('connection', (conn) => {
+                    if (this.lobbyPlayers.length >= 4) {
+                        conn.on('open', () => {
+                            conn.send({ type: 'ROOM_FULL' });
+                            setTimeout(() => conn.close(), 250);
+                        });
+                        return;
+                    }
+
+                    this.connections.push(conn);
+
+                    conn.on('data', (data) => {
+                        this.handleHostReceiveData(conn, data);
+                    });
+
+                    conn.on('close', () => {
+                        this.connections = this.connections.filter(c => c !== conn);
+                        this.lobbyPlayers = this.lobbyPlayers.filter(p => p.id !== conn.peer);
+                        this.broadcastLobby();
+                        this.updateLobbyUI();
+
+                        const inGamePlayer = gameState.players.find(p => p.id === conn.peer);
+                        if (inGamePlayer) {
+                            inGamePlayer.online = false;
+                            inGamePlayer.isBot = true; // تحويل تلقائي لبوت ذكي حتى لا تتوقف المباراة!
+                            showToast(`⚠️ انقطع اتصال ${inGamePlayer.name}، سيكمل البوت مكانه`, 'error');
+                            this.broadcastState();
+                            renderGame();
+                            checkBotTurn();
+                        } else {
+                            showToast('غادر أحد اللاعبين الغرفة', 'error');
+                        }
+                    });
+                });
+
+                this.peer.on('error', (err) => {
+                    if (err.type === 'unavailable-id') {
+                        this.createRoom();
+                    } else {
+                        showToast('خطأ في الشبكة: ' + err.type, 'error');
+                    }
+                });
+            },
+
+            joinRoom(autoCode = null) {
+                const code = (autoCode || document.getElementById('input-room-code').value).trim().toUpperCase();
+                if (code.length < 4) {
+                    showToast('أدخل كود الغرفة الصحيح', 'error');
+                    return;
+                }
+                if (typeof Peer === 'undefined') {
+                    showToast('تحقق من اتصالك بالإنترنت', 'error');
+                    return;
+                }
+
+                this.cleanup();
+                this.isHost = false;
+                this.isGuestReady = false;
+                this.roomCode = code;
+                const hostFullId = `aplus-uno-${code}`;
+
+                document.getElementById('online-choice-view').classList.add('hidden');
+                document.getElementById('online-lobby-view').classList.remove('hidden');
+                document.getElementById('display-room-code').textContent = code;
+                document.getElementById('online-status-text').textContent = 'جاري الربط المباشر مع المضيف...';
+                document.getElementById('btn-start-online-game').classList.add('hidden');
+                document.getElementById('btn-add-lobby-bot').classList.add('hidden');
+                document.getElementById('btn-guest-ready').classList.remove('hidden');
+
+                this.peer = new Peer(PEER_CONFIG);
+
+                this.peer.on('open', (myId) => {
+                    this.myPeerId = myId;
+                    const conn = this.peer.connect(hostFullId, { reliable: true, serialization: 'json' });
+                    this.hostConn = conn;
+
+                    conn.on('open', () => {
+                        const myName = document.getElementById('input-player-name').value.trim() || 'صديق';
+                        conn.send({ type: 'JOIN_REQUEST', id: myId, name: myName });
+                        document.getElementById('online-status-text').textContent = 'متصل بنجاح! اضغط جاهز بانتظار المضيف';
+                        this.startHeartbeat();
+                    });
+
+                    conn.on('data', (data) => {
+                        this.handleGuestReceiveData(data);
+                    });
+
+                    conn.on('close', () => {
+                        showToast('المضيف أغلق الغرفة!', 'error');
+                        exitToMenu();
+                    });
+                });
+
+                this.peer.on('error', () => {
+                    showToast('تعذر العثور على الغرفة، تأكد من الكود', 'error');
+                    document.getElementById('online-choice-view').classList.remove('hidden');
+                    document.getElementById('online-lobby-view').classList.add('hidden');
+                });
+            },
+
+            addBotToLobby() {
+                if (!this.isHost || this.lobbyPlayers.length >= 4) return;
+                const botNum = this.lobbyPlayers.filter(p => p.isBot).length + 1;
+                const botNames = ['روبوت ألفا 🤖', 'سارة AI 🧠', 'صقر الذكي 🦅'];
+                this.lobbyPlayers.push({
+                    id: `online_bot_${Date.now()}_${botNum}`,
+                    name: botNames[botNum - 1] || `بوت ${botNum}`,
+                    ready: true,
+                    isBot: true
+                });
+                SoundFX.playCard();
+                this.updateLobbyUI();
+                this.broadcastLobby();
+            },
+
+            removeLobbyPlayer(playerId) {
+                if (!this.isHost || playerId === this.myPeerId) return;
+                this.lobbyPlayers = this.lobbyPlayers.filter(p => p.id !== playerId);
+                const targetConn = this.connections.find(c => c.peer === playerId);
+                if (targetConn) {
+                    try { targetConn.close(); } catch (e) {}
+                    this.connections = this.connections.filter(c => c.peer !== playerId);
+                }
+                this.updateLobbyUI();
+                this.broadcastLobby();
+            },
+
+            toggleGuestReady() {
+                if (this.isHost || !this.hostConn || !this.hostConn.open) return;
+                this.isGuestReady = !this.isGuestReady;
+                const btn = document.getElementById('btn-guest-ready');
+                btn.textContent = this.isGuestReady ? 'تم تأكيد الجاهزية ✓' : 'تأكيد الجاهزية ✓';
+                btn.className = this.isGuestReady
+                    ? 'w-full py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black text-base transition'
+                    : 'w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base transition';
+                this.hostConn.send({ type: 'READY_TOGGLE', id: this.myPeerId, ready: this.isGuestReady });
+            },
+
+            handleHostReceiveData(conn, data) {
+                if (data.type === 'PING') {
+                    conn.send({ type: 'PONG', ts: data.ts, v: gameState.stateVersion });
+                    if (data.v < gameState.stateVersion && gameState.players.length > 0) {
+                        this.broadcastState();
+                    }
+                    return;
+                }
+                if (data.type === 'PONG') {
+                    const rtt = Math.max(1, Date.now() - data.ts);
+                    this.updatePingDisplay(Math.round(rtt / 2));
+                    return;
+                }
+                if (data.type === 'SYNC_REQ') {
+                    this.broadcastState();
+                    return;
+                }
+                if (data.type === 'JOIN_REQUEST') {
+                    if (!this.lobbyPlayers.some(p => p.id === data.id)) {
+                        this.lobbyPlayers.push({ id: data.id, name: data.name, ready: false, isBot: false });
+                        SoundFX.playCard();
+                    }
+                    this.updateLobbyUI();
+                    this.broadcastLobby();
+                } else if (data.type === 'READY_TOGGLE') {
+                    const p = this.lobbyPlayers.find(pl => pl.id === data.id);
+                    if (p) p.ready = data.ready;
+                    this.updateLobbyUI();
+                    this.broadcastLobby();
+                } else if (data.type === 'ACTION') {
+                    const act = data.action;
+                    if (act.type === 'PLAY_CARD') {
+                        executePlayCard(act.playerIndex, act.cardIndex, act.chosenColor);
+                    } else if (act.type === 'DRAW_CARD') {
+                        executeDrawCard(act.playerIndex);
+                    } else if (act.type === 'CALL_UNO') {
+                        executeCallUno(act.playerId);
+                    } else if (act.type === 'CATCH_UNO') {
+                        executeCatchUno(act.targetId, act.catcherName);
+                    }
+                } else if (data.type === 'CHAT') {
+                    showToast(`💬 ${data.sender}: ${data.message}`);
+                    this.connections.forEach(c => {
+                        if (c.peer !== conn.peer && c.open) c.send(data);
+                    });
+                }
+            },
+
+            handleGuestReceiveData(data) {
+                if (data.type === 'PING') {
+                    if (this.hostConn && this.hostConn.open) {
+                        this.hostConn.send({ type: 'PONG', ts: data.ts, v: this.lastSyncedVersion });
+                    }
+                    if (data.v > this.lastSyncedVersion && gameState.players.length > 0) {
+                        this.requestManualSync();
+                    }
+                    return;
+                }
+                if (data.type === 'PONG') {
+                    const rtt = Math.max(1, Date.now() - data.ts);
+                    this.updatePingDisplay(Math.round(rtt / 2));
+                    return;
+                }
+                if (data.type === 'ROOM_FULL') {
+                    showToast('عذراً، الغرفة ممتلئة (4 لاعبين كحد أقصى)', 'error');
+                    this.cleanup();
+                    return;
+                }
+                if (data.type === 'LOBBY_UPDATE') {
+                    this.lobbyPlayers = data.players;
+                    this.updateLobbyUI();
+                } else if (data.type === 'STATE_SYNC') {
+                    const incoming = data.state;
+                    if (incoming.stateVersion < this.lastSyncedVersion) return; // تجاهل الحزم القديمة
+                    this.lastSyncedVersion = incoming.stateVersion;
+
+                    const prevWinner = gameState.winner;
+                    gameState = { ...gameState, ...incoming };
+
+                    closeSetupModals();
+                    document.getElementById('screen-menu').classList.add('hidden');
+                    document.getElementById('screen-game').classList.remove('hidden');
+                    document.getElementById('screen-game').classList.add('flex');
+                    document.getElementById('btn-quick-chat').classList.remove('hidden');
+                    document.getElementById('btn-force-sync').classList.remove('hidden');
+                    const pingBadge = document.getElementById('ping-badge');
+                    pingBadge.classList.remove('hidden');
+                    pingBadge.classList.add('flex');
+
+                    if (!gameState.winner) {
+                        document.getElementById('gameover-modal').classList.add('hidden');
+                        stopConfetti();
+                    }
+
+                    SoundFX.playCard();
+                    renderGame();
+
+                    if (gameState.winner && !prevWinner) {
+                        showGameOverScreen(gameState.winner);
+                    }
+                } else if (data.type === 'CHAT') {
+                    showToast(`💬 ${data.sender}: ${data.message}`);
+                }
+            },
+
+            updateLobbyUI() {
+                document.getElementById('lobby-count').textContent = this.lobbyPlayers.length;
+                const addBotBtn = document.getElementById('btn-add-lobby-bot');
+                if (this.isHost) {
+                    addBotBtn.classList.toggle('hidden', this.lobbyPlayers.length >= 4);
+                }
+
+                const listEl = document.getElementById('lobby-players-list');
+                listEl.innerHTML = this.lobbyPlayers.map((p, idx) => `
+                    <div class="flex items-center justify-between bg-white/5 border border-white/10 px-3.5 py-2 rounded-xl">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full ${p.ready ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}"></span>
+                            <span class="font-bold text-sm text-white">${p.name}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-black px-2 py-0.5 rounded ${
+                                idx === 0 ? 'bg-blue-500/20 text-blue-300' :
+                                p.ready ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                            }">
+                                ${idx === 0 ? 'المضيف 👑' : (p.ready ? 'جاهز ✓' : 'ينتظر...')}
+                            </span>
+                            ${this.isHost && idx > 0 ? `<button onclick="OnlineManager.removeLobbyPlayer('${p.id}')" class="text-xs text-red-400 hover:text-red-300 px-1">✕</button>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+
+                if (this.isHost) {
+                    const startBtn = document.getElementById('btn-start-online-game');
+                    startBtn.classList.remove('hidden');
+                    if (this.lobbyPlayers.length >= 2) {
+                        startBtn.disabled = false;
+                        startBtn.textContent = `ابدأ المباراة الآن (${this.lobbyPlayers.length} لاعبين) 🚀`;
+                    } else {
+                        startBtn.disabled = true;
+                        startBtn.textContent = 'بانتظار انضمام لاعب أو إضافة بوت...';
+                    }
+                }
+            },
+
+            broadcastLobby() {
+                this.connections.forEach(c => {
+                    if (c.open) c.send({ type: 'LOBBY_UPDATE', players: this.lobbyPlayers });
+                });
+            },
+
+            hostStartGame() {
+                if (!this.isHost || this.lobbyPlayers.length < 2) return;
+                const stacking = document.getElementById('toggle-stacking').checked;
+                this.lastSyncedVersion = 0;
+                const players = this.lobbyPlayers.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    isBot: !!p.isBot,
+                    hand: [],
+                    saidUno: false,
+                    online: true
+                }));
+                closeSetupModals();
+                initGameSession('online', players, stacking);
+            },
+
+            broadcastState() {
+                if (!this.isHost) return;
+                const payload = {
+                    type: 'STATE_SYNC',
+                    state: {
+                        stateVersion: gameState.stateVersion,
+                        mode: 'online',
+                        stackingEnabled: gameState.stackingEnabled,
+                        deck: gameState.deck,
+                        discardPile: gameState.discardPile,
+                        players: gameState.players,
+                        currentPlayerIndex: gameState.currentPlayerIndex,
+                        direction: gameState.direction,
+                        activeColor: gameState.activeColor,
+                        pendingDraw: gameState.pendingDraw,
+                        pendingDrawType: gameState.pendingDrawType,
+                        winner: gameState.winner,
+                        unoVulnerablePlayerId: gameState.unoVulnerablePlayerId
+                    }
+                };
+                this.connections.forEach(c => {
+                    if (c.open) c.send(payload);
+                });
+            },
+
+            sendActionToHost(action) {
+                if (this.hostConn && this.hostConn.open) {
+                    this.hostConn.send({ type: 'ACTION', action });
+                }
+            },
+
+            requestManualSync() {
+                if (this.isHost) {
+                    this.broadcastState();
+                    showToast('تم إرسال تحديث المزامنة للجميع 🔄');
+                } else if (this.hostConn && this.hostConn.open) {
+                    this.hostConn.send({ type: 'SYNC_REQ' });
+                    showToast('جاري مزامنة الطاولة... 🔄');
+                }
+            },
+
+            sendChat(message) {
+                const viewer = gameState.players[getViewerPlayerIndex()];
+                const sender = viewer ? viewer.name : 'لاعب';
+                const payload = { type: 'CHAT', sender, message };
+                showToast(`💬 أنت: ${message}`);
+
+                if (this.isHost) {
+                    this.connections.forEach(c => { if (c.open) c.send(payload); });
+                } else if (this.hostConn && this.hostConn.open) {
+                    this.hostConn.send(payload);
+                }
+            },
+
+            cleanup() {
+                clearInterval(this.heartbeatInterval);
+                if (this.peer) {
+                    try { this.peer.destroy(); } catch (e) {}
+                    this.peer = null;
+                }
+                this.connections = [];
+                this.hostConn = null;
+                this.lobbyPlayers = [];
+                this.isHost = false;
+                this.lastSyncedVersion = 0;
+            }
+        };
+
+        function copyTextFallback(text, successMsg) {
+            const tempInput = document.createElement('input');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            showToast(successMsg, 'success');
+        }
+
+        function copyRoomCode() {
+            const code = document.getElementById('display-room-code').textContent;
+            copyTextFallback(code, `تم نسخ كود الغرفة: ${code} 📋`);
+        }
+
+        function getInviteURL() {
+            const code = document.getElementById('display-room-code').textContent;
+            const url = new URL(window.location.href);
+            url.searchParams.set('room', code);
+            return url.toString();
+        }
+
+        function copyInviteLink() {
+            copyTextFallback(getInviteURL(), 'تم نسخ رابط الدعوة المباشر! أرسله لصديقك 🔗');
+        }
+
+        function shareWhatsApp() {
+            const code = document.getElementById('display-room-code').textContent;
+            const link = getInviteURL();
+            const text = encodeURIComponent(`تعال نلعب أونو UNO مع بعض في A+ GAMES! 🔥\nكود الغرفة: *${code}*\nأو ادخل مباشرة من الرابط:\n${link}`);
+            window.open(`https://wa.me/?text=${text}`, '_blank');
+        }
+
+        function toggleChatPopover() {
+            document.getElementById('quick-chat-popover').classList.toggle('hidden');
+        }
+
+        function sendQuickChat(msg) {
+            document.getElementById('quick-chat-popover').classList.add('hidden');
+            OnlineManager.sendChat(msg);
+        }
+
+        // تهيئة أولية + دعم الدخول التلقائي عبر رابط الدعوة (?room=CODE)
+        window.onload = () => {
+            selectBotCount(2);
+            selectBotDiff('smart');
+
+            const params = new URLSearchParams(window.location.search);
+            const roomParam = params.get('room');
+            if (roomParam && roomParam.trim().length >= 4) {
+                const cleanCode = roomParam.trim().toUpperCase();
+                openSetupModal('online');
+                document.getElementById('input-room-code').value = cleanCode;
+                setTimeout(() => OnlineManager.joinRoom(cleanCode), 350);
+            }
+        };
+    </script>
+</body>
+</html>
